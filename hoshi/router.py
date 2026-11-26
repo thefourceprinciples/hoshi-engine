@@ -62,7 +62,9 @@ def collapse_state(state: Dict[str, Any], signal: ParsedSignal, contamination_ri
         return mapping[signal.intent_class]
     if current in TERMINAL_SUBSPACES and signal.intent_class in {"reflection", "question"}:
         return "REFLECTIVE"
-    return "BRIDGE" if signal.action_pressure >= 0.33 else "REFLECTIVE"
+    if signal.action_pressure >= 0.33:
+        return "BRIDGE"
+    return "REFLECTIVE"
 
 
 def response_for_subspace(subspace: str, signal: ParsedSignal, state: Dict[str, Any]) -> str:
@@ -199,7 +201,9 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
     signal = parse_signal(text, db_path=db_path)
     save_parsed_signal(signal, db_path=db_path)
 
-    contamination_risk = round(clamp(safe_float(current_state.get("contamination_risk"), 0.02) * 0.55 + min(0.75, len(signal.contamination_flags) * 0.18)), 4)
+    prev_contam = safe_float(current_state.get("contamination_risk"), 0.02) * 0.55
+    flag_contam = min(0.75, len(signal.contamination_flags) * 0.18)
+    contamination_risk = round(clamp(prev_contam + flag_contam), 4)
     ambiguity_score = signal.ambiguity_score
     coherence_score = compute_coherence(signal, current_state)
     constraint_score = compute_constraint(signal)
@@ -215,7 +219,28 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
     else:
         transition_ready = next_subspace in TERMINAL_SUBSPACES
         pending_bridge = None
-        recovery_anchor = "REFLECTIVE" if contamination_risk  0.35 else ("transition" if signal.intent_class in {"task", "identity_update", "memory", "chronovisor"} else ("uncertain" if ambiguity_score > 0.4 else "dialogue"))
+        if contamination_risk <= 0.35:
+            recovery_anchor = "REFLECTIVE"
+        else:
+            recovery_anchor = source_subspace
+
+    resonance = dict(current_state.get("memory_resonance") or {})
+    resonance["hoshi"] = 1.0
+    resonance[f"intent::{signal.intent_class}"] = round(max(0.1, 0.4 + signal.action_pressure), 4)
+    resonance[signal.role_pressure] = round(max(0.15, 0.35 + signal.emotional_valence * 0.3), 4)
+
+    role_signature = f"{signal.role_pressure}:{next_subspace.lower()}"
+    active_capsules = sanitize_capsules(
+        current_state.get("active_capsules", []) + signal.capsule_candidates + [next_subspace, "HOSHI"]
+    )
+    if contamination_risk > 0.35:
+        identity_mode = "recovery"
+    elif signal.intent_class in {"task", "identity_update", "memory", "chronovisor"}:
+        identity_mode = "transition"
+    elif ambiguity_score > 0.4:
+        identity_mode = "uncertain"
+    else:
+        identity_mode = "dialogue"
 
     structured_result: Dict[str, Any] = {}
     notes: List[str] = []
@@ -230,7 +255,9 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
             transition_ready = True
 
     if next_subspace == "ARCHIVE":
-        dkey = re.sub(r"[^a-z0-9_\-]", "_", signal.normalized_text.lower())[:80] if signal.intent_class in {"memory", "identity_update"} else None
+        dkey = None
+        if signal.intent_class in {"memory", "identity_update"}:
+            dkey = re.sub(r"[^a-z0-9_\-]", "_", signal.normalized_text.lower())[:80]
         mid = insert_memory(
             text=signal.normalized_text,
             memory_kind="manifest" if looks_like_manifest(text) else signal.intent_class,
@@ -248,9 +275,15 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
     if next_subspace == "IDENTITY":
         ckey = re.sub(r"[^a-z0-9_-]", "_", signal.normalized_text.lower())[:80]
         imid = insert_memory(
-            text=signal.normalized_text, memory_kind="identity_update", role_mode="core",
-            anchor_strength=0.9, stability_weight=0.92, drift_risk=0.08,
-            tags=["identity_touch", "governance"], dedupe_key=f"identity::{ckey}", db_path=db_path,
+            text=signal.normalized_text,
+            memory_kind="identity_update",
+            role_mode="core",
+            anchor_strength=0.9,
+            stability_weight=0.92,
+            drift_risk=0.08,
+            tags=["identity_touch", "governance"],
+            dedupe_key=f"identity::{ckey}",
+            db_path=db_path,
         )
         structured_result["identity_memory_id"] = imid
         notes.append(f"Committed identity-relevant material as memory #{imid}.")
@@ -260,13 +293,24 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
         notes.append("Chronovisor reconstruction completed.")
 
     if next_subspace == "EXECUTION":
-        structured_result["execution"] = {"status": "prepared", "summary": f"Structured execution plan prepared for: {signal.normalized_text[:180]}"}
+        structured_result["execution"] = {
+            "status": "prepared",
+            "summary": f"Structured execution plan prepared for: {signal.normalized_text[:180]}",
+        }
         notes.append("Execution route prepared.")
 
     bridge_status = "blocked" if contamination_risk > 0.35 else "planned"
-    boundary_type = "hard" if contamination_risk > 0.35 else ("identity" if next_subspace in {"IDENTITY", "CHRONOVISOR"} else "soft")
+    if contamination_risk > 0.35:
+        boundary_type = "hard"
+    elif next_subspace in {"IDENTITY", "CHRONOVISOR"}:
+        boundary_type = "identity"
+    else:
+        boundary_type = "soft"
+
     bridge_id = f"{source_subspace}_TO_{next_subspace}_{ts}"
     response_text = response_for_subspace(next_subspace, signal, current_state)
+    bridge_conf = round(clamp(coherence_score * 0.78 + (1.0 - ambiguity_score) * 0.22), 4)
+    event_notes = " | ".join(notes) if notes else signal.semantic_payload
 
     with closing(get_conn(db_path)) as conn, conn:
         conn.execute(
@@ -280,7 +324,7 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
             (
                 bridge_id, source_subspace, next_subspace, signal.semantic_payload[:240],
                 0.58, 0.42, json_dumps(["identity_continuity", "provenance", "non_contradiction"]),
-                source_subspace, round(clamp(coherence_score * 0.78 + (1.0 - ambiguity_score) * 0.22), 4), bridge_status,
+                source_subspace, bridge_conf, bridge_status,
             ),
         )
         conn.execute(
@@ -305,7 +349,7 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
             INSERT INTO subspace_events (source_subspace, target_subspace, boundary_type, bridge_id, success, notes)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (source_subspace, next_subspace, boundary_type, bridge_id, 1 if bridge_status != "blocked" else 0, " | ".join(notes) if notes else signal.semantic_payload),
+            (source_subspace, next_subspace, boundary_type, bridge_id, 1 if bridge_status != "blocked" else 0, event_notes),
         )
         conn.execute(
             """
