@@ -11,6 +11,7 @@ from .db import (
     recent_memories,
     recent_parsed_signals,
 )
+from .garden import list_garden_seeds, water_framework
 from .parser import normalize_text, parse_signal
 from .router import chronovisor_query, engine_step
 
@@ -44,6 +45,7 @@ def create_app() -> Flask:
             events=recent_events(),
             signals=recent_parsed_signals(),
             memories=recent_memories(),
+            almanac=list_garden_seeds(),
             chronovisor_queries=recent_chronovisor_queries(),
             last_result=last_result,
             prefill_text=prefill_text,
@@ -78,6 +80,17 @@ def create_app() -> Flask:
     def api_memory():
         return jsonify(recent_memories(limit=50))
 
+    @app.route("/api/almanac", methods=["GET"])
+    def api_almanac():
+        return jsonify(list_garden_seeds())
+
+    @app.route("/api/cas/<fr_id>", methods=["GET"])
+    def api_cas(fr_id: str):
+        res = water_framework(fr_id, level=1)
+        if not res:
+            return jsonify({"error": f"{fr_id} not found"}), 404
+        return jsonify(res["cas_field_card"])
+
     @app.route("/health", methods=["GET"])
     def health():
         st = latest_identity_state()
@@ -103,20 +116,27 @@ DASHBOARD_HTML = """<!doctype html>
   textarea { width:100%; min-height:140px; background:#0b0f14; color:#e6edf3; border:1px solid #30363d; border-radius:8px; padding:10px; }
   button { background:#58a6ff; color:#fff; border:0; border-radius:8px; padding:9px 14px; font-weight:700; cursor:pointer; margin-top:8px; }
   .pill { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; border:1px solid #30363d; margin:2px; }
+  pre { background:#0b0f14; padding:10px; border-radius:8px; overflow-x:auto; font-size:12px; white-space:pre-wrap; }
 </style></head><body><div class="wrap">
   <h1>{{ app_name }}</h1>
   <div class="grid">
-    <div class="panel"><h2>Signal Console</h2>
+    <div class="panel"><h2>Signal &amp; Garden Console</h2>
       <form method="post" action="{{ url_for('index') }}">
-        <textarea name="text" placeholder="Send Hoshi a signal, task, timeline prompt, or manifest...">{{ prefill_text }}</textarea>
+        <textarea name="text" placeholder="Send a signal, Plant FR-001 | Name | Bed | Invariant, Water FR-001 at Level 2, or Garden Harvest...">{{ prefill_text }}</textarea>
         <button type="submit">Process Signal</button>
       </form>
-      {% if last_result %}<p><strong>Response:</strong> {{ last_result.response_text }}</p>{% endif %}
+      {% if last_result %}
+        <p><strong>Response:</strong> {{ last_result.response_text }}</p>
+        {% if last_result.structured_result %}<pre>{{ last_result.structured_result | tojson(indent=2) }}</pre>{% endif %}
+      {% endif %}
     </div>
     <div class="panel"><h2>Active State</h2>
       <p>Mode: <strong>{{ state.identity_mode }}</strong> | Subspace: <strong>{{ state.active_subspace }}</strong></p>
       <p>Coherence: <strong>{{ state.coherence_score }}</strong> | Constraint: <strong>{{ state.constraint_score }}</strong> | Fource: <strong>{{ state.fource_score }}</strong></p>
       <div>{% for c in state.active_capsules %}<span class="pill">{{ c }}</span>{% endfor %}</div>
+    </div>
+    <div class="panel"><h2>The Farmer's Almanac ({{ almanac | length }})</h2>
+      {% for s in almanac %}<div style="border-bottom:1px solid #30363d;padding:6px 0;"><strong>{{ s.framework_id }} · {{ s.name }}</strong> [{{ s.status }}]<br><small>{{ s.almanac_shelfmark }}</small></div>{% else %}<p style="color:#8b949e;">No seeds planted yet. Try: <code>Plant FR-001 | Hoshi Core | KERNEL | Local-first stateful memory router.</code></p>{% endfor %}
     </div>
     <div class="panel"><h2>Recent Memory</h2>
       {% for m in memories %}<div style="border-bottom:1px solid #30363d;padding:6px 0;"><strong>{{ m.memory_kind }}</strong>: {{ m.text[:140] }}</div>{% endfor %}
