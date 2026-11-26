@@ -1,129 +1,66 @@
-# Hoshi Engine
+# Hoshi Engine (`v3.1.0`)
 
-## Looking for collaborators
+**Local-first stateful cognitive archive, subspace router, and SQLite memory backbone built with Python 3 and Flask.**
 
-This project is actively seeking 1–3 collaborators to help stabilize and modularize the current prototype. See "What Needs Work" below for details.
+Instead of treating every prompt as a stateless `input -> output` exchange, Hoshi routes signals through a deterministic state machine that preserves identity continuity, memory provenance, and contamination guardrails across sessions:
 
-Hoshi is a local-first, stateful cognitive archive built with Flask and SQLite.
+```text
+input -> signal parser -> subspace router -> SQLite memory / identity / timeline -> output
+```
 
-It is designed to preserve structured memory, track identity over time, and route reasoning across internal modes instead of treating every interaction as a stateless input/output exchange.
+---
 
-## Current Status
+### Modular Architecture
 
-Hoshi currently exists as a working prototype implemented in a single file:
+```text
+hoshi-engine/
+├── hoshi/
+│   ├── __init__.py     # Package version & metadata
+│   ├── db.py           # SQLite schema initialization & persistence helpers
+│   ├── parser.py       # Intent, role, capsule, ambiguity & contamination parsing
+│   ├── router.py       # Coherence scoring, subspace transitions, Chronovisor & manifest ingestion
+│   └── app.py          # Flask dashboard, CORS-enabled JSON API & health routes
+├── tests/
+│   └── test_hoshi.py   # Automated pytest verification suite
+├── app_identity.py     # CLI and local web server entry point
+└── requirements.txt
+```
 
-- `app_identity.py`
+---
 
-The system already includes:
+### Core Capabilities
 
-- signal parsing
-- identity state tracking
-- memory and archive storage
-- subspace routing
-- event and bridge logging
-- Chronovisor scaffolding
-- local SQLite persistence
-- basic Flask routes and dashboard behavior
+* **Stateful Subspace Routing:** Transitions smoothly across `REFLECTIVE`, `BRIDGE`, `EXECUTION`, `ARCHIVE`, `IDENTITY`, and `CHRONOVISOR` states based on signal intent, action pressure, and ambiguity.
+* **Contamination & Recovery Guardrails:** Detects malformed payloads, SQL injection patterns, and high-entropy blobs—automatically blocking unsafe transitions and locking into `recovery` mode.
+* **Structured Manifest Ingestion:** Parses `HOSHI_MANIFEST_START ... HOSHI_MANIFEST_END` blocks to bulk-insert deduplicated memories, anchor weights, and active capsules.
+* **Chronovisor Timeline Reconstruction:** Extracts temporal anchors (`YYYY`) and named entities to assemble provisional sequence hypotheses.
+* **CORS-Enabled Local REST API:** Exposes `/api/respond`, `/api/state`, `/api/timeline`, `/api/memory`, and `/health` on `127.0.0.1:5001` so browser front-ends (such as `Lumen`) can archive state directly into local SQLite.
 
-## Core Idea
+---
 
-Most systems follow a simple pattern:
+### Quickstart
 
-`input -> output`
+#### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-Hoshi instead follows a stateful path more like:
+#### 2. Run Interactive CLI Mode
+```bash
+python app_identity.py
+```
 
-`input -> parsed signal -> routed state -> memory / identity / archive -> output`
+#### 3. Launch Web Dashboard & Local JSON API (`http://127.0.0.1:5001`)
+```bash
+HOSHI_WEB=1 python app_identity.py
+```
 
-The goal is to preserve continuity, provenance, and structure over time.
+#### 4. Run Automated Tests
+```bash
+python -m pytest -v
+```
 
-## Current Architecture
+---
 
-### Application Layer
-- Flask app
-- local dashboard
-- API routes
-
-### Core Logic
-- signal parser
-- subspace router
-- identity engine
-- memory/archive handling
-- Chronovisor scaffold
-
-### Persistence
-
-Current prototype uses SQLite-backed persistence for:
-
-- identity state
-- parsed signals
-- memory entries
-- interaction logs
-- subspace events
-- bridges
-- Chronovisor queries
-
-## What Works Right Now
-
-- local runtime  
-- persistent memory  
-- state tracking  
-- subspace transitions  
-- archive behavior  
-- prototype routing structure  
-
-## What Needs Work
-
-The project is real, but still early. Immediate priorities are:
-
-1. Modularize `app_identity.py` into a cleaner multi-file architecture  
-2. Confirm and clean the canonical database/schema  
-3. Improve signal parsing and routing consistency  
-4. Add tests and migration safety  
-5. Make the project easier for collaborators to understand and extend  
-
-## Collaboration Goal
-
-I am looking for a small number of careful collaborators who are comfortable with:
-
-- Python  
-- Flask  
-- SQLite  
-- refactoring messy but working prototypes  
-- preserving behavior while improving structure  
-
-This is not a rewrite-from-scratch project. The goal is to stabilize and extend the working system.
-
-## Near-Term Refactor Direction
-
-Planned module split:
-
-- `app.py`  
-- `db.py`  
-- `parser.py`  
-- `router.py`  
-- `memory.py`  
-- `identity.py`  
-- `chronovisor.py`  
-
-## Design Priorities
-
-- local-first operation  
-- identity continuity  
-- memory provenance  
-- clean archive behavior  
-- explicit state transitions  
-- safe iterative refactoring  
-
-## Repository Notes
-
-At the moment, this repository contains the active prototype file and project scaffolding. Additional documentation, issue tracking, and architectural cleanup are the next step.
-
-## Getting Started (Current State)
-
-This is a prototype. To run locally:
-
-1. Ensure Python 3.10+ is installed  
-2. Install Flask:
-   ```bash
-   pip install flask
+### License
+MIT License
