@@ -4,6 +4,7 @@ from flask import Flask, jsonify, render_template_string, request, url_for
 
 from . import __version__
 from .db import (
+    init_db,
     latest_identity_state,
     recent_chronovisor_queries,
     recent_events,
@@ -17,6 +18,7 @@ APP_NAME = "Hoshi Identity Engine"
 
 
 def create_app() -> Flask:
+    init_db()
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
