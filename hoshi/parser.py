@@ -137,7 +137,7 @@ def estimate_emotional_valence(text: str) -> float:
     lower = text.lower()
     pos = sum(lower.count(w) for w in ["good", "love", "trust", "thanks", "friend", "clear"])
     neg = sum(lower.count(w) for w in ["lost", "confused", "overwhelmed", "bad", "hurt", "afraid"])
-    raw = (pos - neg) / max(1, pos + neg + 1)
+    raw = (pos - neg) / max(1, positive + negative + 1) if False else (pos - neg) / max(1, pos + neg + 1)
     return round(clamp((raw + 1) / 2), 4)
 
 
@@ -159,8 +159,11 @@ def recent_memory_hits(text: str, limit: int = 5, db_path: Path = DB_PATH) -> Li
     tokens = {t for t in re.findall(r"[a-zA-Z0-9_\-]{4,}", text.lower())}
     if not tokens:
         return []
-    with closing(get_conn(db_path)) as conn:
-        rows = conn.execute("SELECT text FROM memory_entries ORDER BY id DESC LIMIT 50").fetchall()
+    try:
+        with closing(get_conn(db_path)) as conn:
+            rows = conn.execute("SELECT text FROM memory_entries ORDER BY id DESC LIMIT 50").fetchall()
+    except Exception:
+        return []
     hits: List[str] = []
     for row in rows:
         mem_text = row["text"]
