@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .db import DB_PATH, get_conn, json_dumps, latest_identity_state
+from .garden import handle_garden_command
 from .parser import ParsedSignal, clamp, parse_signal, sanitize_capsules, save_parsed_signal
 
 TERMINAL_SUBSPACES = {"EXECUTION", "ARCHIVE", "IDENTITY", "CHRONOVISOR"}
@@ -46,6 +47,8 @@ def compute_constraint(signal: ParsedSignal) -> float:
 def compute_fource(coherence_score: float, constraint_score: float) -> float:
     denom = max(0.06, 1.0 - constraint_score + 0.12)
     return round(clamp((coherence_score * 0.82) / denom), 4)
+
+
 def collapse_state(state: Dict[str, Any], signal: ParsedSignal, contamination_risk: float, ambiguity_score: float) -> str:
     current = (state.get("active_subspace") or "REFLECTIVE").upper()
     if contamination_risk > 0.35:
@@ -77,8 +80,6 @@ def response_for_subspace(subspace: str, signal: ParsedSignal, state: Dict[str, 
         "CHRONOVISOR": "Chronovisor layer active. Temporal anchors, entities, and sequence hypotheses are being reconstructed.",
     }
     return responses.get(subspace, state.get("response_text") or "State holding.")
-
-
 def insert_memory(
     text: str, memory_kind: str, role_mode: str, anchor_strength: float,
     stability_weight: float, drift_risk: float, tags: Optional[List[str]] = None,
@@ -102,6 +103,8 @@ def insert_memory(
             (text, memory_kind, role_mode, anchor_strength, stability_weight, drift_risk, json_dumps(tags or []), dedupe_key),
         )
         return int(cur.lastrowid)
+
+
 def chronovisor_query(text: str, signal: ParsedSignal, db_path: Path = DB_PATH) -> Dict[str, Any]:
     anchors = re.findall(r"\b\d{3,4}\b", text)
     entities = re.findall(r"\b[A-Z][a-zA-Z]+\b", text)
@@ -244,6 +247,11 @@ def engine_step(text: str, db_path: Path = DB_PATH) -> Dict[str, Any]:
 
     structured_result: Dict[str, Any] = {}
     notes: List[str] = []
+
+    garden_hit = handle_garden_command(text, db_path=db_path)
+    if garden_hit:
+        structured_result["garden"] = garden_hit
+        notes.append(f"Farmer's Almanac executed ({garden_hit.get('command')}).")
 
     if looks_like_manifest(text):
         mres = ingest_manifest(text, db_path=db_path)
