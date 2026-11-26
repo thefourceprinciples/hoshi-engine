@@ -168,6 +168,9 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 ),
             )
 
+    from .garden import init_garden_db
+    init_garden_db(db_path)
+
 
 def latest_identity_state(db_path: Path = DB_PATH) -> Dict[str, Any]:
     with closing(get_conn(db_path)) as conn:
