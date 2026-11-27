@@ -68,11 +68,30 @@ def test_manifest_ingestion(tmp_path: Path):
     assert "INTEGRITY" in res["state"]["active_capsules"]
 
 
-def test_flask_api_health_and_cors():
+def test_garden_almanac_plant_water_and_cas(tmp_path: Path):
+    db_file = tmp_path / "garden_hoshi.db"
+    init_db(db_file)
+
+    planted = engine_step("Plant FR-001 | Hoshi Engine | KERNEL | Local-first SQLite state router", db_path=db_file)
+    assert planted["structured_result"]["garden"]["command"] == "PLANT"
+    assert "ALMANAC::ZONE-000::CORE_SYSTEMS::KERNEL::FR-001" == planted["structured_result"]["garden"]["almanac_shelfmark"]
+
+    watered = engine_step("Water FR-001 at Level 2", db_path=db_file)
+    assert watered["structured_result"]["garden"]["watering_level"] == 2
+    assert "cas_field_card" in watered["structured_result"]["garden"]
+
+
+def test_flask_api_health_and_strict_cors():
     app = create_app()
     client = app.test_client()
-    resp = client.get("/health")
-    assert resp.status_code == 200
-    assert resp.headers.get("Access-Control-Allow-Origin") == "*"
-    data = resp.get_json()
-    assert data["status"] == "ok"
+
+    # Trusted GitHub Pages origin is allowed
+    ok_resp = client.get("/health", headers={"Origin": "https://github.io"})
+    assert ok_resp.status_code == 200
+    assert ok_resp.headers.get("Access-Control-Allow-Origin") == "https://github.io"
+    assert ok_resp.headers.get("X-Frame-Options") == "DENY"
+
+    # Untrusted external origin is blocked from CORS
+    bad_resp = client.get("/health", headers={"Origin": "https://example.com"})
+    assert bad_resp.status_code == 200
+    assert bad_resp.headers.get("Access-Control-Allow-Origin") is None
