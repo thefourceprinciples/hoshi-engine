@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from contextlib import closing
 from pathlib import Path
@@ -142,13 +143,34 @@ def list_garden_seeds(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
 
 
 def build_cas_field_card(seed: Dict[str, Any]) -> Dict[str, Any]:
-    """Minimalist 5-line CAS Pocket Field Card for fast Steward ingestion."""
+    """Minimalist CAS Pocket Field Card enriched with CUC v0.2 Darkness/Propensity."""
+    stage_coherence = {
+        "tree": 0.96,
+        "fruiting": 0.94,
+        "branching": 0.86,
+        "rooted": 0.78,
+        "sprout": 0.68,
+        "seed": 0.60,
+        "market": 0.90,
+        "dormant": 0.45,
+        "quarantined": 0.25,
+        "composted": 0.15,
+    }
+    coherence = stage_coherence.get(str(seed.get("status", "seed")).lower(), 0.60)
+    darkness = round(max(0.0, 0.25 * (1.0 - coherence) + (0.20 if seed.get("quarantine_notes") else 0.0)), 4)
+    q_cuc = round(coherence * math.exp(-darkness), 4)
+
     return {
         "cas_id": f"{seed['framework_id']} | {seed['name']} [{seed['status'].upper()}]",
         "almanac_shelfmark": seed["almanac_shelfmark"],
         "invariant": seed["one_line_invariant"],
         "fruit_count": len(seed.get("fruit", [])),
         "gate_status": seed.get("quarantine_notes") or "CLEAR",
+        "cuc_v02_status": {
+            "coherence_C": coherence,
+            "darkness_D": darkness,
+            "propensity_Q_CUC": q_cuc,
+        },
         "return_phrase": seed["return_phrase"],
     }
 
