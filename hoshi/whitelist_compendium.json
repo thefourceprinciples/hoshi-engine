@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "policy": "STRICT_INSTITUTIONAL_ALLOWLIST",
+  "pillars": {
+    "ancient_mediterranean_ane": [
+      "www.sefaria.org",
+      "papyri.info",
+      "www.trismegistos.org",
+      "www.perseus.tufts.edu",
+      "cdli.mpiwg-berlin.mpg.de",
+      "etcsl.orinst.ox.ac.uk"
+    ],
+    "asian_south_asian_islamic": [
+      "ctext.org",
+      "suttacentral.net",
+      "gretil.sub.uni-goettingen.de"
+    ],
+    "americas_africa_endangered": [
+      "www.famsi.org",
+      "www.loc.gov",
+      "eap.bl.uk"
+    ],
+    "european_national_libraries": [
+      "gallica.bnf.fr",
+      "digital.bodleian.ox.ac.uk",
+      "digi.vatlib.it",
+      "www.dmgh.de",
+      "www.europeana.eu"
+    ],
+    "national_archives": [
+      "catalog.archives.gov",
+      "discovery.nationalarchives.gov.uk",
+      "whc.unesco.org"
+    ],
+    "primary_text_commons": [
+      "en.wikisource.org",
+      "archive.org",
+      "www.gutenberg.org",
+      "en.wikipedia.org"
+    ],
+    "scholarly_science_indexes": [
+      "api.openalex.org",
+      "api.crossref.org",
+      "eutils.ncbi.nlm.nih.gov",
+      "zenodo.org"
+    ]
+  }
+}
