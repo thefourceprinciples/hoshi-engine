@@ -54,7 +54,8 @@ def safe_fetch_json(url: str) -> dict:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "HoshiChronovisorHarvester/1.1 (https://github.com)"
+            "User-Agent": "Mozilla/5.0 (compatible; HoshiChronovisorBot/1.1; +https://github.com)",
+            "Accept": "application/json",
         },
     )
     with urllib.request.urlopen(req, timeout=25) as resp:
@@ -94,7 +95,7 @@ def fetch_sefaria(ref: str) -> tuple[str, str]:
 
 def fetch_openalex(query: str) -> tuple[str, str]:
     q = urllib.parse.quote(query)
-    api = f"https://openalex.org{q}&per-page=5"
+    api = f"https://openalex.org{q}&per-page=5&mailto=research@thefourceprinciples.org"
     data = safe_fetch_json(api)
     results = data.get("results", [])
     if not results:
@@ -142,9 +143,10 @@ def sweep_all_sources(target: str) -> list[tuple[str, str, str]]:
         try:
             txt, url = fn(target)
             if txt and len(txt.strip()) > 40:
+                print(f"    [+] {label}: {len(txt)} chars")
                 hits.append((label, txt, url))
-        except Exception:
-            continue
+        except Exception as err:
+            print(f"    [-] {label}: {err}")
     return hits
 
 
