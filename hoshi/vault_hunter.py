@@ -50,6 +50,11 @@ def load_allowed_domains() -> set[str]:
 ALLOWED_DOMAINS = load_allowed_domains()
 
 
+def _build_api_url(host: str, path: str, params: dict) -> str:
+    query_str = urllib.parse.urlencode(params)
+    return urllib.parse.urlunparse(("https", host, path, "", query_str, ""))
+
+
 def safe_fetch_json(url: str) -> dict:
     parsed = urllib.parse.urlparse(url)
     host = parsed.netloc.lower()
@@ -57,7 +62,10 @@ def safe_fetch_json(url: str) -> dict:
         raise ValueError(f"SECURITY BLOCK — Non-whitelisted domain: {host}")
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "HoshiVaultHunter/1.0 (https://github.com)"},
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; HoshiVaultHunter/1.1; +https://github.com)",
+            "Accept": "application/json",
+        },
     )
     with urllib.request.urlopen(req, timeout=25) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -89,29 +97,46 @@ def extract_lexical_fingerprint(text: str) -> dict:
     }
 def query_archival_leads(target_title: str) -> list[str]:
     leads = []
-    q_paper = urllib.parse.quote(f"{target_title} manuscript papyrus fragment provenance")
     try:
-        oa_url = f"https://openalex.org{q_paper}&per-page=5"
+        oa_url = _build_api_url(
+            "api.openalex.org",
+            "/works",
+            {
+                "search": f"{target_title} manuscript papyrus fragment provenance",
+                "per-page": "5",
+                "mailto": "research@thefourceprinciples.org",
+            },
+        )
         oa_data = safe_fetch_json(oa_url)
         for w in oa_data.get("results", []):
             title = w.get("title", "Untitled")
             year = w.get("publication_year", "n.d.")
             doi = w.get("doi") or w.get("id", "")
             leads.append(f"- **[OPENALEX PAPYROLOGY]** {title} ({year}) — `{doi}`")
-    except Exception:
-        pass
+    except Exception as err:
+        print(f"    [-] OpenAlex Papyrology: {err}")
 
-    q_cat = urllib.parse.quote(f"({target_title}) AND (papyrus OR codex OR fragment OR cartonnage) AND mediatype:texts")
     try:
-        ia_url = f"https://archive.org{q_cat}&fl[]=identifier,title,date&rows=5&page=1&output=json"
+        ia_url = _build_api_url(
+            "archive.org",
+            "/advancedsearch.php",
+            {
+                "q": f"({target_title}) AND (papyrus OR codex OR fragment OR cartonnage) AND mediatype:texts",
+                "fl[]": "identifier,title,date",
+                "rows": "5",
+                "page": "1",
+                "output": "json",
+            },
+        )
         ia_data = safe_fetch_json(ia_url)
         for d in ia_data.get("response", {}).get("docs", []):
             ident = d.get("identifier", "")
             title = d.get("title", "Untitled")
             date = d.get("date", "n.d.")
-            leads.append(f"- **[ARCHIVE CATALOG]** {title} ({date}) — `https://archive.org{ident}`")
-    except Exception:
-        pass
+            detail_url = _build_api_url("archive.org", f"/details/{ident}", {})
+            leads.append(f"- **[ARCHIVE CATALOG]** {title} ({date}) — `{detail_url}`")
+    except Exception as err:
+        print(f"    [-] Archive Catalog: {err}")
 
     return leads
 
