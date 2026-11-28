@@ -1,0 +1,49 @@
+{
+  "fips": "17201",
+  "county": "Winnebago County",
+  "state": "IL",
+  "state_name": "Illinois",
+  "municipality": "City of Rockford",
+  "tier_1_federal_baseline": {
+    "statutes": ["CERCLA (42 U.S.C. 9601)", "RCRA (42 U.S.C. 6901)", "Small Business Liability Relief and Brownfields Revitalization Act"],
+    "standards": ["ASTM E1527-21 (Phase I ESA)", "ASTM E1903-19 (Phase II ESA)"],
+    "grant_programs": ["EPA MARC Assessment Grants", "EPA MARC Cleanup Grants", "EPA Multipurpose & Revolving Loan Fund (RLF) Grants"]
+  },
+  "tier_2_state_delegation": {
+    "cleanup_program": "Illinois EPA (IEPA) Site Remediation Program (SRP)",
+    "cleanup_standards": "35 Ill. Adm. Code Part 742 — Tiered Approach to Corrective Action Objectives (TACO)",
+    "tax_increment_statute": "Illinois Tax Increment Allocation Redevelopment Act (65 ILCS 5/11-74.4)",
+    "state_grant_programs": ["Illinois DCEO Brownfields Redevelopment Grant", "IEPA Office of Brownfields Assistance"]
+  },
+  "tier_3_local_overlay": {
+    "municipal_ordinances": [
+      "City of Rockford Groundwater Restriction Ordinance (enables TACO Tier 1/2/3 pathway exclusion & No Further Remediation letters)",
+      "Winnebago County Health Department Well & Subsurface Protection Rules"
+    ],
+    "priority_corridors": [
+      "Cedar Street & South Main Industrial Corridor",
+      "Kishwaukee Street & 11th Street Manufacturing Belt",
+      "Rock River / Riverfront Redevelopment Zone",
+      "Barber-Colman / West State Legacy Foundry Zone"
+    ],
+    "governance_channels": [
+      "City of Rockford Planning & Development Committee",
+      "Rockford City Council Code & Regulation Committee",
+      "Winnebago County Board Economic Development Committee",
+      "Northern Illinois Land Bank Authority (NILBA)"
+    ]
+  },
+  "official_portals": [
+    "https://epa.gov",
+    "https://illinois.gov",
+    "https://rockfordil.gov",
+    "https://wincoil.gov"
+  ],
+  "receptors_of_concern": [
+    "Rock River",
+    "Kishwaukee River",
+    "Keith Creek",
+    "Kent Creek",
+    "Municipal Cambrian-Ordovician Deep Sandstone Aquifer Wells"
+  ]
+}
