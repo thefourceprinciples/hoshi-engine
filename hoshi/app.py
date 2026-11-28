@@ -17,6 +17,15 @@ from .router import chronovisor_query, engine_step
 
 APP_NAME = "Hoshi Identity Engine"
 
+TRUSTED_ORIGINS = {
+    "https://github.io",
+    "https://thefourceprinciples.github.io",
+    "http://127.0.0.1:5001",
+    "http://localhost:5001",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+}
+
 
 def create_app() -> Flask:
     init_db()
@@ -25,7 +34,10 @@ def create_app() -> Flask:
 
     @app.after_request
     def add_cors_headers(response):
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        origin = request.headers.get("Origin", "")
+        if origin in TRUSTED_ORIGINS or origin.endswith(".github.io"):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         return response
