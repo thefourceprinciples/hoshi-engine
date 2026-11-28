@@ -23,10 +23,14 @@ jobs:
       - name: Run Sanitized Tier-A Harvester
         run: python hoshi/harvester.py
 
+      - name: Run Museum Vault Hunter
+        run: python hoshi/vault_hunter.py
+
       - name: Commit Verified Tier-A Anchors to Canon Vault
         run: |
+          mkdir -p canon
           git config user.name "Hoshi Chronovisor Bot"
           git config user.email "hoshi-bot@://github.com"
-          git add canon RESEARCH_QUEUE.md
-          git diff --staged --quiet || git commit -m "Hoshi Sleep Cycle: Harvested SHA-256 Tier-A anchors"
+          git add -A canon RESEARCH_QUEUE.md
+          git diff --staged --quiet || git commit -m "Hoshi Sleep Cycle: Harvested SHA-256 Tier-A anchors & Vault Hunt leads"
           git push
