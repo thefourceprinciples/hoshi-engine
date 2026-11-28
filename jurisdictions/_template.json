@@ -1,0 +1,29 @@
+{
+  "fips": "00000",
+  "county": "Target County Name",
+  "state": "ST",
+  "state_name": "State Name",
+  "municipality": "Primary Municipality Name",
+  "tier_1_federal_baseline": {
+    "statutes": ["CERCLA (42 U.S.C. 9601)", "RCRA (42 U.S.C. 6901)"],
+    "standards": ["ASTM E1527-21 (Phase I ESA)", "ASTM E1903-19 (Phase II ESA)"],
+    "grant_programs": ["EPA MARC Assessment Grants", "EPA MARC Cleanup Grants", "EPA Revolving Loan Fund (RLF)"]
+  },
+  "tier_2_state_delegation": {
+    "cleanup_program": "[LOCAL MUNICIPAL CODE — VERIFY BEFORE ACTION] State Voluntary Cleanup Program",
+    "cleanup_standards": "[LOCAL MUNICIPAL CODE — VERIFY BEFORE ACTION] State Soil & Groundwater Cleanup Objectives",
+    "tax_increment_statute": "[LOCAL MUNICIPAL CODE — VERIFY BEFORE ACTION] State TIF / PILOT / Brownfield Tax Credit Statute",
+    "state_grant_programs": []
+  },
+  "tier_3_local_overlay": {
+    "municipal_ordinances": [
+      "[LOCAL MUNICIPAL CODE — VERIFY BEFORE ACTION] Local Groundwater / Zoning / Health Ordinance"
+    ],
+    "priority_corridors": [],
+    "governance_channels": []
+  },
+  "official_portals": [
+    "https://epa.gov"
+  ],
+  "receptors_of_concern": []
+}
