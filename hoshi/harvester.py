@@ -46,6 +46,11 @@ def sanitize_text(raw: str) -> str:
     return cleaned.strip()
 
 
+def _build_api_url(host: str, path: str, params: dict) -> str:
+    query_str = urllib.parse.urlencode(params)
+    return urllib.parse.urlunparse(("https", host, path, "", query_str, ""))
+
+
 def safe_fetch_json(url: str) -> dict:
     parsed = urllib.parse.urlparse(url)
     host = parsed.netloc.lower()
@@ -54,7 +59,7 @@ def safe_fetch_json(url: str) -> dict:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; HoshiChronovisorBot/1.1; +https://github.com)",
+            "User-Agent": "Mozilla/5.0 (compatible; HoshiChronovisorBot/1.2; +https://github.com)",
             "Accept": "application/json",
         },
     )
@@ -63,39 +68,50 @@ def safe_fetch_json(url: str) -> dict:
 
 
 def fetch_wikisource(title: str) -> tuple[str, str]:
-    slug = urllib.parse.quote(title.replace(" ", "_"))
-    api = f"https://wikisource.org{slug}&format=json"
+    slug = title.replace(" ", "_")
+    api = _build_api_url(
+        "en.wikisource.org",
+        "/w/api.php",
+        {"action": "query", "prop": "extracts", "explaintext": "1", "redirects": "1", "titles": slug, "format": "json"},
+    )
     data = safe_fetch_json(api)
     for pid, page in data.get("query", {}).get("pages", {}).items():
         if pid != "-1" and page.get("extract"):
-            return page["extract"], f"https://wikisource.org{slug}"
+            return page["extract"], _build_api_url("en.wikisource.org", f"/wiki/{urllib.parse.quote(slug)}", {})
     return "", ""
 
 
 def fetch_wikipedia(title: str) -> tuple[str, str]:
-    slug = urllib.parse.quote(title.replace(" ", "_"))
-    api = f"https://wikipedia.org{slug}&format=json"
+    slug = title.replace(" ", "_")
+    api = _build_api_url(
+        "en.wikipedia.org",
+        "/w/api.php",
+        {"action": "query", "prop": "extracts", "explaintext": "1", "redirects": "1", "titles": slug, "format": "json"},
+    )
     data = safe_fetch_json(api)
     for pid, page in data.get("query", {}).get("pages", {}).items():
         if pid != "-1" and page.get("extract"):
-            return page["extract"], f"https://wikipedia.org{slug}"
+            return page["extract"], _build_api_url("en.wikipedia.org", f"/wiki/{urllib.parse.quote(slug)}", {})
     return "", ""
 
 
 def fetch_sefaria(ref: str) -> tuple[str, str]:
     slug = urllib.parse.quote(ref.replace(" ", "_"))
-    api = f"https://sefaria.org{slug}?context=0"
+    api = _build_api_url("www.sefaria.org", f"/api/texts/{slug}", {"context": "0"})
     data = safe_fetch_json(api)
     en_lines = data.get("text", [])
     if isinstance(en_lines, list) and en_lines:
         flat = "\n".join(str(x) for x in en_lines if x)
-        return flat, f"https://sefaria.org{slug}"
+        return flat, _build_api_url("www.sefaria.org", f"/{slug}", {})
     return "", ""
 
 
 def fetch_openalex(query: str) -> tuple[str, str]:
-    q = urllib.parse.quote(query)
-    api = f"https://openalex.org{q}&per-page=5&mailto=research@thefourceprinciples.org"
+    api = _build_api_url(
+        "api.openalex.org",
+        "/works",
+        {"search": query, "per-page": "5", "mailto": "research@thefourceprinciples.org"},
+    )
     data = safe_fetch_json(api)
     results = data.get("results", [])
     if not results:
@@ -110,12 +126,21 @@ def fetch_openalex(query: str) -> tuple[str, str]:
             for a in w.get("authorships", [])[:3]
         )
         lines.append(f"- **{title}** ({year}) — {authors} | Ref: {doi}")
-    return "\n".join(lines), f"https://openalex.org{q}"
+    return "\n".join(lines), api
 
 
 def fetch_archive(query: str) -> tuple[str, str]:
-    q = urllib.parse.quote(f"({query}) AND mediatype:texts")
-    api = f"https://archive.org{q}&fl[]=identifier,title,creator,date,description&rows=5&page=1&output=json"
+    api = _build_api_url(
+        "archive.org",
+        "/advancedsearch.php",
+        {
+            "q": f"({query}) AND mediatype:texts",
+            "fl[]": "identifier,title,creator,date,description",
+            "rows": "5",
+            "page": "1",
+            "output": "json",
+        },
+    )
     data = safe_fetch_json(api)
     docs = data.get("response", {}).get("docs", [])
     if not docs:
@@ -129,7 +154,7 @@ def fetch_archive(query: str) -> tuple[str, str]:
         lines.append(f"- **{title}** ({date}) | Archive ID: `{ident}` — {desc}")
     first_doc = next(iter(docs), {})
     first_id = first_doc.get("identifier", "")
-    return "\n".join(lines), f"https://archive.org{first_id}"
+    return "\n".join(lines), _build_api_url("archive.org", f"/details/{first_id}", {})
 def sweep_all_sources(target: str) -> list[tuple[str, str, str]]:
     fetchers = [
         ("WIKISOURCE", fetch_wikisource),
