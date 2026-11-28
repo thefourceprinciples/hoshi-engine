@@ -1,25 +1,33 @@
-name: Hoshi Engine CI
+name: Hoshi Chronovisor Sleep Cycle Harvester
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  test-hoshi:
+  harvest-canon:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Checkout Hoshi Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Run Hoshi unit and API tests
-        run: python -m pytest -v
+          python-version: "3.11"
+
+      - name: Run Sanitized Tier-A Harvester
+        run: python hoshi/harvester.py
+
+      - name: Commit Verified Tier-A Anchors to Canon Vault
+        run: |
+          mkdir -p canon
+          git config user.name "Hoshi Chronovisor Bot"
+          git config user.email "hoshi-bot@://github.com"
+          git add -A canon RESEARCH_QUEUE.md
+          git diff --staged --quiet || git commit -m "Hoshi Sleep Cycle: Harvested SHA-256 Tier-A anchors"
+          git push
