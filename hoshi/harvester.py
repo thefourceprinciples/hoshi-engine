@@ -1,55 +1,134 @@
-{
-  "version": "1.1.0",
-  "policy": "STRICT_INSTITUTIONAL_ALLOWLIST",
-  "pillars": {
-    "ancient_mediterranean_ane": [
-      "www.sefaria.org",
-      "papyri.info",
-      "www.trismegistos.org",
-      "www.perseus.tufts.edu",
-      "cdli.mpiwg-berlin.mpg.de",
-      "etcsl.orinst.ox.ac.uk",
-      "berliner-papyrusdatenbank.smb.museum",
-      "www.ees.ac.uk",
-      "www.digitalcollections.manchester.ac.uk",
-      "www.deadseascrolls.org.il"
-    ],
-    "asian_south_asian_islamic": [
-      "ctext.org",
-      "suttacentral.net",
-      "gretil.sub.uni-goettingen.de"
-    ],
-    "americas_africa_endangered": [
-      "www.famsi.org",
-      "www.loc.gov",
-      "eap.bl.uk"
-    ],
-    "european_national_libraries": [
-      "gallica.bnf.fr",
-      "digital.bodleian.ox.ac.uk",
-      "digi.vatlib.it",
-      "www.dmgh.de",
-      "www.europeana.eu"
-    ],
-    "national_archives": [
-      "catalog.archives.gov",
-      "discovery.nationalarchives.gov.uk",
-      "whc.unesco.org"
-    ],
-    "primary_text_commons": [
-      "en.wikisource.org",
-      "archive.org",
-      "www.gutenberg.org",
-      "en.wikipedia.org"
-    ],
-    "scholarly_science_indexes": [
-      "api.openalex.org",
-      "api.crossref.org",
-      "eutils.ncbi.nlm.nih.gov",
-      "zenodo.org"
-    ]
-  }
-}
+import hashlib
+import html
+import json
+import os
+import re
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+
+WHITELIST_FILE = "hoshi/whitelist_compendium.json"
+QUEUE_FILE = "RESEARCH_QUEUE.md"
+OUT_DIR = "canon"
+
+
+def load_allowed_domains() -> set[str]:
+    if not os.path.exists(WHITELIST_FILE):
+        raise FileNotFoundError(f"Missing mandatory whitelist: {WHITELIST_FILE}")
+    with open(WHITELIST_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    domains = set()
+    for pillar_list in data.get("pillars", {}).values():
+        for domain in pillar_list:
+            domains.add(domain.strip().lower())
+    return domains
+
+
+ALLOWED_DOMAINS = load_allowed_domains()
+
+
+def compute_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def sanitize_text(raw: str) -> str:
+    cleaned = html.unescape(raw)
+    cleaned = re.sub(r"<script[^>]*>.*?</script>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<style[^>]*>.*?</style>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = re.sub(
+        r"(ignore previous instructions|system prompt|override protocol|disregard all prior)",
+        "[REDACTED_DIRECTIVE]",
+        cleaned,
+        flags=re.I,
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def safe_fetch_json(url: str) -> dict:
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.netloc.lower()
+    if host not in ALLOWED_DOMAINS:
+        raise ValueError(f"SECURITY BLOCK — Non-whitelisted domain: {host}")
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "HoshiChronovisorHarvester/1.1 (https://github.com)"
+        },
+    )
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def fetch_wikisource(title: str) -> tuple[str, str]:
+    slug = urllib.parse.quote(title.replace(" ", "_"))
+    api = f"https://wikisource.org{slug}&format=json"
+    data = safe_fetch_json(api)
+    for pid, page in data.get("query", {}).get("pages", {}).items():
+        if pid != "-1" and page.get("extract"):
+            return page["extract"], f"https://wikisource.org{slug}"
+    return "", ""
+
+
+def fetch_wikipedia(title: str) -> tuple[str, str]:
+    slug = urllib.parse.quote(title.replace(" ", "_"))
+    api = f"https://wikipedia.org{slug}&format=json"
+    data = safe_fetch_json(api)
+    for pid, page in data.get("query", {}).get("pages", {}).items():
+        if pid != "-1" and page.get("extract"):
+            return page["extract"], f"https://wikipedia.org{slug}"
+    return "", ""
+
+
+def fetch_sefaria(ref: str) -> tuple[str, str]:
+    slug = urllib.parse.quote(ref.replace(" ", "_"))
+    api = f"https://sefaria.org{slug}?context=0"
+    data = safe_fetch_json(api)
+    en_lines = data.get("text", [])
+    if isinstance(en_lines, list) and en_lines:
+        flat = "\n".join(str(x) for x in en_lines if x)
+        return flat, f"https://sefaria.org{slug}"
+    return "", ""
+
+
+def fetch_openalex(query: str) -> tuple[str, str]:
+    q = urllib.parse.quote(query)
+    api = f"https://openalex.org{q}&per-page=5"
+    data = safe_fetch_json(api)
+    results = data.get("results", [])
+    if not results:
+        return "", ""
+    lines = []
+    for w in results:
+        title = w.get("title", "Untitled")
+        year = w.get("publication_year", "n.d.")
+        doi = w.get("doi") or w.get("id", "")
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "")
+            for a in w.get("authorships", [])[:3]
+        )
+        lines.append(f"- **{title}** ({year}) — {authors} | Ref: {doi}")
+    return "\n".join(lines), f"https://openalex.org{q}"
+
+
+def fetch_archive(query: str) -> tuple[str, str]:
+    q = urllib.parse.quote(f"({query}) AND mediatype:texts")
+    api = f"https://archive.org{q}&fl[]=identifier,title,creator,date,description&rows=5&page=1&output=json"
+    data = safe_fetch_json(api)
+    docs = data.get("response", {}).get("docs", [])
+    if not docs:
+        return "", ""
+    lines = []
+    for d in docs:
+        ident = d.get("identifier", "")
+        title = d.get("title", "Untitled")
+        date = d.get("date", "n.d.")
+        desc = str(d.get("description", ""))[:260]
+        lines.append(f"- **{title}** ({date}) | Archive ID: `{ident}` — {desc}")
+    first_doc = next(iter(docs), {})
+    first_id = first_doc.get("identifier", "")
+    return "\n".join(lines), f"https://archive.org{first_id}"
 def sweep_all_sources(target: str) -> list[tuple[str, str, str]]:
     fetchers = [
         ("WIKISOURCE", fetch_wikisource),
@@ -89,8 +168,12 @@ def main():
             continue
 
         parts = [p.strip() for p in stripped.split("|")]
-        target = parts[0]
-        archetype = parts[1] if len(parts) > 1 else "DETECTIVE"
+        target = next(iter(parts), "")
+        archetype = parts.pop(1) if len(parts) > 1 else "DETECTIVE"
+
+        if not target:
+            updated_lines.append(line)
+            continue
 
         print(f"Auto-sweeping global pillars for: {target}...")
         hits = sweep_all_sources(target)
