@@ -54,7 +54,7 @@ def safe_fetch_json(url: str) -> dict:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "HoshiChronovisorHarvester/1.0 (https://github.com)"
+            "User-Agent": "HoshiChronovisorHarvester/1.1 (https://github.com)"
         },
     )
     with urllib.request.urlopen(req, timeout=25) as resp:
@@ -65,8 +65,7 @@ def fetch_wikisource(title: str) -> tuple[str, str]:
     slug = urllib.parse.quote(title.replace(" ", "_"))
     api = f"https://wikisource.org{slug}&format=json"
     data = safe_fetch_json(api)
-    pages = data.get("query", {}).get("pages", {})
-    for pid, page in pages.items():
+    for pid, page in data.get("query", {}).get("pages", {}).items():
         if pid != "-1" and page.get("extract"):
             return page["extract"], f"https://wikisource.org{slug}"
     return "", ""
@@ -76,8 +75,7 @@ def fetch_wikipedia(title: str) -> tuple[str, str]:
     slug = urllib.parse.quote(title.replace(" ", "_"))
     api = f"https://wikipedia.org{slug}&format=json"
     data = safe_fetch_json(api)
-    pages = data.get("query", {}).get("pages", {})
-    for pid, page in pages.items():
+    for pid, page in data.get("query", {}).get("pages", {}).items():
         if pid != "-1" and page.get("extract"):
             return page["extract"], f"https://wikipedia.org{slug}"
     return "", ""
@@ -126,29 +124,34 @@ def fetch_archive(query: str) -> tuple[str, str]:
         ident = d.get("identifier", "")
         title = d.get("title", "Untitled")
         date = d.get("date", "n.d.")
-        desc = str(d.get("description", ""))[:300]
+        desc = str(d.get("description", ""))[:260]
         lines.append(f"- **{title}** ({date}) | Archive ID: `{ident}` — {desc}")
     return "\n".join(lines), f"https://archive.org{docs.get('identifier', '')}"
 
 
-def harvest_target(target: str, hint: str) -> tuple[str, str]:
-    hint = hint.lower().strip()
-    if hint == "sefaria":
-        return fetch_sefaria(target)
-    if hint == "openalex":
-        return fetch_openalex(target)
-    if hint == "archive":
-        return fetch_archive(target)
-    if hint == "wikisource":
-        txt, src = fetch_wikisource(target)
-        if txt:
-            return txt, src
-    return fetch_wikipedia(target)
+def sweep_all_sources(target: str) -> list[tuple[str, str, str]]:
+    fetchers = [
+        ("WIKISOURCE", fetch_wikisource),
+        ("SEFARIA", fetch_sefaria),
+        ("OPENALEX", fetch_openalex),
+        ("INTERNET_ARCHIVE", fetch_archive),
+        ("WIKIPEDIA", fetch_wikipedia),
+    ]
+    hits = []
+    for label, fn in fetchers:
+        try:
+            txt, url = fn(target)
+            if txt and len(txt.strip()) > 40:
+                hits.append((label, txt, url))
+        except Exception:
+            continue
+    return hits
 
 
 def main():
     if not os.path.exists(QUEUE_FILE):
-        print("No RESEARCH_QUEUE.md found.")
+        with open(QUEUE_FILE, "w", encoding="utf-8") as f:
+            f.write("# HOSHI CHRONOVISOR // AUTONOMOUS RESEARCH QUEUE\n")
         return
 
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -166,48 +169,49 @@ def main():
 
         parts = [p.strip() for p in stripped.split("|")]
         target = parts
-        archetype = parts if len(parts) > 1 else "detective"
-        hint = parts if len(parts) > 2 else "wikisource"
+        archetype = parts if len(parts) > 1 else "DETECTIVE"
 
-        print(f"Harvesting: {target} (source={hint}, whitelist={len(ALLOWED_DOMAINS)} domains)...")
-        try:
-            raw_text, source_url = harvest_target(target, hint)
-            if not raw_text:
-                print(f"  -> No verified text returned for {target}.")
-                updated_lines.append(line)
-                continue
-
-            clean_text = sanitize_text(raw_text)[:20000]
-            sha = compute_sha256(clean_text)
-            slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", f"{target}_{hint}").strip("_").upper()
-            out_path = os.path.join(OUT_DIR, f"ANCHOR_{slug}.md")
-            ts = datetime.now(timezone.utc).isoformat()
-
-            doc_md = (
-                f"# TIER-A VERIFIED ANCHOR // {target.upper()}\n"
-                f"- **Epistemic Tier:** VERIFIED // INSTITUTIONAL ARCHIVE ({hint.upper()})\n"
-                f"- **SHA-256 Digest:** `{sha}`\n"
-                f"- **Source URL:** {source_url}\n"
-                f"- **Target Archetype:** {archetype.upper()}\n"
-                f"- **Harvested UTC:** {ts}\n\n"
-                f"---\n\n"
-                f"<QUARANTINED_RAW_SOURCE>\n{clean_text}\n</QUARANTINED_RAW_SOURCE>\n"
-            )
-
-            with open(out_path, "w", encoding="utf-8") as out_f:
-                out_f.write(doc_md)
-
-            updated_lines.append(f"[HARVESTED] {stripped} | SHA256:{sha[:12]}\n")
-            harvested_count += 1
-            print(f"  -> Saved {out_path} [SHA256:{sha[:12]}]")
-        except Exception as exc:
-            print(f"  -> Error harvesting {target}: {exc}")
+        print(f"Auto-sweeping global pillars for: {target}...")
+        hits = sweep_all_sources(target)
+        if not hits:
+            print(f"  -> No verified matches found for {target}.")
             updated_lines.append(line)
+            continue
+
+        sections = []
+        source_urls = []
+        for label, raw_txt, url in hits:
+            clean = sanitize_text(raw_txt)[:8000]
+            sections.append(f"## SOURCE PILLAR: {label}\n- **URL:** {url}\n\n{clean}")
+            source_urls.append(f"{label}: {url}")
+
+        combined_body = "\n\n---\n\n".join(sections)
+        sha = compute_sha256(combined_body)
+        slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", target).strip("_").upper()
+        out_path = os.path.join(OUT_DIR, f"ANCHOR_{slug}.md")
+        ts = datetime.now(timezone.utc).isoformat()
+
+        doc_md = (
+            f"# TIER-A MULTI-PILLAR ANCHOR // {target.upper()}\n"
+            f"- **Epistemic Tier:** VERIFIED // INSTITUTIONAL ARCHIVE BUNDLE ({len(hits)} SOURCES)\n"
+            f"- **SHA-256 Digest:** `{sha}`\n"
+            f"- **Target Archetype:** {archetype.upper()}\n"
+            f"- **Harvested UTC:** {ts}\n\n"
+            f"---\n\n"
+            f"<QUARANTINED_RAW_SOURCE>\n{combined_body}\n</QUARANTINED_RAW_SOURCE>\n"
+        )
+
+        with open(out_path, "w", encoding="utf-8") as out_f:
+            out_f.write(doc_md)
+
+        updated_lines.append(f"[HARVESTED] {target} | {archetype} | {len(hits)}_SOURCES | SHA256:{sha[:12]}\n")
+        harvested_count += 1
+        print(f"  -> Saved {out_path} ({len(hits)} sources) [SHA256:{sha[:12]}]")
 
     if harvested_count > 0:
         with open(QUEUE_FILE, "w", encoding="utf-8") as f:
             f.writelines(updated_lines)
-        print(f"Sleep cycle complete: {harvested_count} anchors verified and hashed.")
+        print(f"Sleep cycle complete: {harvested_count} multi-pillar anchors verified.")
 
 
 if __name__ == "__main__":
