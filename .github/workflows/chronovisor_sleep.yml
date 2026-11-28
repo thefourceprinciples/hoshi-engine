@@ -26,11 +26,14 @@ jobs:
       - name: Run Museum Vault Hunter
         run: python hoshi/vault_hunter.py
 
+      - name: Run Geospatial Stratigraphy
+        run: python hoshi/stratigraphy.py
+
       - name: Commit Verified Tier-A Anchors to Canon Vault
         run: |
           mkdir -p canon
           git config user.name "Hoshi Chronovisor Bot"
           git config user.email "hoshi-bot@://github.com"
           git add -A canon RESEARCH_QUEUE.md
-          git diff --staged --quiet || git commit -m "Hoshi Sleep Cycle: Harvested SHA-256 Tier-A anchors & Vault Hunt leads"
+          git diff --staged --quiet || git commit -m "Hoshi Sleep Cycle: Harvested SHA-256 Tier-A anchors, Vault Hunt & Stratigraphy"
           git push
