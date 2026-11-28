@@ -33,13 +33,16 @@ def create_app() -> Flask:
     app.config["JSON_SORT_KEYS"] = False
 
     @app.after_request
-    def add_cors_headers(response):
+    def add_security_and_cors_headers(response):
         origin = request.headers.get("Origin", "")
         if origin in TRUSTED_ORIGINS or origin.endswith(".github.io"):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     @app.route("/", methods=["GET", "POST"])
